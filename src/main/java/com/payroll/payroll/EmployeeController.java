@@ -1,7 +1,12 @@
 package com.payroll.payroll;
 
-import java.util.List;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
+import org.springframework.hateoas.CollectionModel;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -13,16 +18,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class EmployeeController {
     private final EmployeeRepository repository;
+    private final EmployeeModelAssembler employeeModelAssembler;
 
-    public EmployeeController(EmployeeRepository repository) {
+    public EmployeeController(EmployeeRepository repository, EmployeeModelAssembler employeeModelAssembler) {
         this.repository = repository;
+        this.employeeModelAssembler = employeeModelAssembler;
     }
 
-    // Aggregateroot
+    // Aggregate root
 
     @GetMapping("/employees")
-    List<Employee> all() {
-        return repository.findAll();
+    CollectionModel<EntityModel<Employee>> all() {
+        List<EntityModel<Employee>> employees = repository.findAll().stream()
+            .map(employeeModelAssembler::toModel)
+            .collect(Collectors.toList());
+
+        return CollectionModel.of(employees, linkTo(methodOn(EmployeeController.class).all()).withSelfRel());
     }
 
     @PostMapping("/employees")
@@ -33,13 +44,16 @@ public class EmployeeController {
     // Single item
 
     @GetMapping("/employees/{id}")
-    Employee one(@PathVariable Long id) {
-        return repository.findById(id)
+    EntityModel<Employee> one(@PathVariable Long id) {
+
+        Employee employee = repository.findById(id)
             .orElseThrow(() -> new EmployeeNotFoundException(id));
+
+        return employeeModelAssembler.toModel(employee);
     }
 
     @PutMapping("/employee/{id}")
-    Employee replaceEmployee(@RequestBody Employee newEmployee, @PathVariable Long id){
+    public Employee replaceEmployee(@RequestBody Employee newEmployee, @PathVariable Long id){
         return repository.findById(id)
             .map(employee -> {
                 employee.setName((newEmployee.getName()));
